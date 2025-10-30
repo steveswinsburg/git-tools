@@ -1,0 +1,10 @@
+{
+  "base_url": "git@github.com:steveswinsburg/",
+  "repositories": [
+    "repo1",
+    "repo2", 
+    "repo3",
+    "another-repo",
+    "yet-another-repo"
+  ]
+}
