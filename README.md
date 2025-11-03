@@ -4,12 +4,12 @@ A few tools I've collected over the years to manage projects that have many git 
 
 ## Features
 
-🔄 **Clone Mode** - Clone all repositories, skip existing ones  
-🚀 **Update Mode** - Switch to main branch and pull latest changes  
-📊 **Status Mode** - View repository status and health  
-� **Custom Checkout Directory** - Configure where repositories are cloned  
-⚙️ **Multiple Config Files** - Support different repository configurations  
-�🛡️ **Fault Tolerant** - Continues processing even when individual repos fail  
+**Clone Mode** - Clone all repositories, skip existing ones  
+**Update Mode** - Switch to main branch and pull latest changes  
+**Status Mode** - View repository status and health  
+**Custom Checkout Directory** - Configure where repositories are cloned  
+**Multiple Config Files** - Support different repository configurations  
+**Fault Tolerance** - Continues processing even when individual repos fail  
 
 ## Quick Start
 
@@ -48,14 +48,11 @@ python3 git-tools.py status  # Check repo status
 You can use different configuration files for different projects or environments:
 
 ```bash
-# Work repositories
+# Work repos
 python3 git-tools.py -c work-repos.json clone
 
-# Personal projects  
+# Personal repos  
 python3 git-tools.py --config personal-repos.json update
-
-# Client projects
-python3 git-tools.py --config client-repos.json status
 ```
 
 ## Options
@@ -79,10 +76,3 @@ python3 git-tools.py --config personal-repositories.json update
 # Verbose output with custom config
 python3 git-tools.py -v --config repositories.json status
 ```
-
-## Notes
-
-- Skips repos with uncommitted changes during updates
-- Handles both `main` and `master` branches
-- Automatically creates checkout directory if it doesn't exist
-- Config files use JSON format for easy editing and validation
