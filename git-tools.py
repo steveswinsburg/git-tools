@@ -10,9 +10,9 @@ from typing import Dict, List, Optional
 
 
 class GitTools:
-    def __init__(self):
+    def __init__(self, config_file: str = "repositories.json"):
         """Initialize the repository manager with configuration."""
-        self.config_file = "repositories.json"
+        self.config_file = config_file
         self.config = self._load_config()
         self.base_url = self.config.get("base_url", "")
         self.checkout_directory = Path(self.config.get("checkout_directory", "."))
@@ -190,8 +190,11 @@ def show_help():
     print("  python3 git-tools.py clone")
     print("  python3 git-tools.py update")
     print("  python3 git-tools.py status")
+    print("  python3 git-tools.py -c work-repos.json clone")
+    print("  python3 git-tools.py --config personal-repos.json update")
     
     print("\nOptions:")
+    print("  -c, --config     Specify custom config file (default: repositories.json)")
     print("  -v, --verbose    Enable verbose logging")
     print("  -h, --help       Show this help")
 
@@ -204,6 +207,25 @@ def main():
     if not args or args[0] in ["-h", "--help", "help"]:
         show_help()
         sys.exit(0)
+    
+    # Handle config file option
+    config_file = "repositories.json"
+    if "-c" in args:
+        config_index = args.index("-c")
+        if config_index + 1 < len(args):
+            config_file = args[config_index + 1]
+            args = args[:config_index] + args[config_index + 2:]
+        else:
+            print("Error: -c option requires a config file path")
+            sys.exit(1)
+    elif "--config" in args:
+        config_index = args.index("--config")
+        if config_index + 1 < len(args):
+            config_file = args[config_index + 1]
+            args = args[:config_index] + args[config_index + 2:]
+        else:
+            print("Error: --config option requires a config file path")
+            sys.exit(1)
     
     # Handle verbose flag
     verbose = False
@@ -223,8 +245,8 @@ def main():
     if verbose:
         logging.getLogger().setLevel(logging.DEBUG)
     
-    # Initialize manager
-    gittools = GitTools()
+    # Initialize manager with specified config file
+    gittools = GitTools(config_file)
     
     # Execute requested operation
     if mode == "clone":
