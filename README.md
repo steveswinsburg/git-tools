@@ -15,7 +15,8 @@ A Python script to manage multiple Git repositories from a JSON configuration fi
 1. Create `repositories.json`:
 ```json
 {
-  "base_url": "git@github.com:steveswinsburg/",
+  "base_url": "https://github.com/steveswinsburg",
+  "checkout_directory": "../my-projects",
   "repositories": [
     "repo1",
     "repo2", 

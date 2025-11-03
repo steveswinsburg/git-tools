@@ -15,6 +15,7 @@ class GitTools:
         self.config_file = "repositories.json"
         self.config = self._load_config()
         self.base_url = self.config.get("base_url", "")
+        self.checkout_directory = Path(self.config.get("checkout_directory", "."))
         self.repositories = self.config.get("repositories", [])
         
         # Setup logging
@@ -63,12 +64,20 @@ class GitTools:
     
     def _repo_exists(self, repo_name: str) -> bool:
         """Check if repository directory exists and is a git repo."""
-        repo_path = Path(repo_name)
+        repo_path = self.checkout_directory / repo_name
         return repo_path.exists() and (repo_path / '.git').exists()
+    
+    def _get_repo_path(self, repo_name: str) -> Path:
+        """Get the full path to a repository."""
+        return self.checkout_directory / repo_name
     
     def clone_repositories(self) -> None:
         """Clone all repositories. Skip if already exists."""
         self.logger.info(f"Starting clone operation for {len(self.repositories)} repositories")
+        self.logger.info(f"Checkout directory: {self.checkout_directory}")
+        
+        # Ensure checkout directory exists
+        self.checkout_directory.mkdir(parents=True, exist_ok=True)
         
         success_count = 0
         skip_count = 0
@@ -83,9 +92,10 @@ class GitTools:
                 continue
             
             repo_url = self._get_repo_url(repo)
-            self.logger.info(f"Cloning {repo_url}")
+            repo_path = self._get_repo_path(repo)
+            self.logger.info(f"Cloning {repo_url} to {repo_path}")
             
-            success, output, error = self._run_command(['git', 'clone', repo_url, repo])
+            success, output, error = self._run_command(['git', 'clone', repo_url, str(repo_path)])
             
             if success:
                 self.logger.info(f"Successfully cloned {repo}")
@@ -99,6 +109,7 @@ class GitTools:
     def update_repositories(self) -> None:
         """Update all repositories by switching to main/master and pulling."""
         self.logger.info(f"Starting update operation for {len(self.repositories)} repositories")
+        self.logger.info(f"Checkout directory: {self.checkout_directory}")
         
         success_count = 0
         error_count = 0
@@ -110,25 +121,27 @@ class GitTools:
                 self.logger.warning(f"Repository {repo} does not exist, skipping")
                 continue
             
+            repo_path = self._get_repo_path(repo)
+            
             # Check if repo has uncommitted changes
-            success, output, error = self._run_command(['git', 'status', '--porcelain'], cwd=repo)
+            success, output, error = self._run_command(['git', 'status', '--porcelain'], cwd=str(repo_path))
             if success and output.strip():
                 self.logger.warning(f"Repository {repo} has uncommitted changes, skipping update")
                 error_count += 1
                 continue
             
             # Switch to main branch
-            success, output, error = self._run_command(['git', 'checkout', 'main'], cwd=repo)
+            success, output, error = self._run_command(['git', 'checkout', 'main'], cwd=str(repo_path))
             if not success:
                 # Try 'master' if 'main' doesn't exist
-                success, output, error = self._run_command(['git', 'checkout', 'master'], cwd=repo)
+                success, output, error = self._run_command(['git', 'checkout', 'master'], cwd=str(repo_path))
                 if not success:
                     self.logger.error(f"Failed to checkout main/master branch for {repo}: {error}")
                     error_count += 1
                     continue
             
             # Pull latest changes
-            success, output, error = self._run_command(['git', 'pull'], cwd=repo)
+            success, output, error = self._run_command(['git', 'pull'], cwd=str(repo_path))
             if success:
                 self.logger.info(f"Successfully updated {repo}")
                 success_count += 1
@@ -142,16 +155,19 @@ class GitTools:
         """List all repositories and their status."""
         self.logger.info("Repository Status:")
         self.logger.info(f"Base URL: {self.base_url}")
+        self.logger.info(f"Checkout Directory: {self.checkout_directory}")
         self.logger.info("-" * 50)
         
         for repo in self.repositories:
             if self._repo_exists(repo):
+                repo_path = self._get_repo_path(repo)
+                
                 # Get current branch
-                success, branch, error = self._run_command(['git', 'branch', '--show-current'], cwd=repo)
+                success, branch, error = self._run_command(['git', 'branch', '--show-current'], cwd=str(repo_path))
                 branch_info = branch if success else "unknown"
                 
                 # Check for uncommitted changes
-                success, status, error = self._run_command(['git', 'status', '--porcelain'], cwd=repo)
+                success, status, error = self._run_command(['git', 'status', '--porcelain'], cwd=str(repo_path))
                 has_changes = success and status.strip()
                 status_info = "dirty" if has_changes else "clean"
                 

@@ -1,10 +1,9 @@
 {
-  "base_url": "git@github.com:steveswinsburg/",
+  "base_url": "https://github.com/steveswinsburg/",
+  "checkout_directory": "../dev",
   "repositories": [
-    "repo1",
-    "repo2", 
-    "repo3",
-    "another-repo",
-    "yet-another-repo"
+    "oracle21c-docker",
+    "steprunner", 
+    "fhirbdd"
   ]
 }
