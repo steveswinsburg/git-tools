@@ -10,9 +10,10 @@ from typing import Dict, List, Optional
 
 
 class GitTools:
-    def __init__(self, config_file: str = "repositories.json"):
-        """Initialize the repository manager with configuration."""
+    def __init__(self, config_file: str = "repositories.json", interactive: bool = False):
+        """Initialise and configure"""
         self.config_file = config_file
+        self.interactive = interactive
         self.config = self._load_config()
         self.base_url = self.config.get("base_url", "")
         self.checkout_directory = Path(self.config.get("checkout_directory", "."))
@@ -29,7 +30,7 @@ class GitTools:
         self.logger = logging.getLogger(__name__)
         
     def _load_config(self) -> Dict:
-        """Load configuration from JSON file."""
+        """Load config"""
         try:
             with open(self.config_file, 'r') as f:
                 return json.load(f)
@@ -41,7 +42,7 @@ class GitTools:
             sys.exit(1)
     
     def _run_command(self, command: List[str], cwd: Optional[str] = None) -> tuple:
-        """Run a shell command and return (success, output, error)."""
+        """Runs a shell command and return (success, output, error)."""
         try:
             result = subprocess.run(
                 command,
@@ -51,6 +52,22 @@ class GitTools:
                 timeout=300  # 5 minutes timeout
             )
             return result.returncode == 0, result.stdout.strip(), result.stderr.strip()
+        except subprocess.TimeoutExpired:
+            return False, "", "Command timeout"
+        except Exception as e:
+            return False, "", str(e)
+    
+    def _run_command_interactive(self, command: List[str], cwd: Optional[str] = None) -> tuple:
+        """Run a command that may require user interaction (like credential prompts)."""
+        try:
+            self.logger.info(f"Running interactive command: {' '.join(command)}")
+            result = subprocess.run(
+                command,
+                cwd=cwd,
+                timeout=300  # 5 minutes timeout
+            )
+            # For interactive commands, we don't capture output but just return success/failure
+            return result.returncode == 0, "", ""
         except subprocess.TimeoutExpired:
             return False, "", "Command timeout"
         except Exception as e:
@@ -95,13 +112,19 @@ class GitTools:
             repo_path = self._get_repo_path(repo)
             self.logger.info(f"Cloning {repo_url} to {repo_path}")
             
-            success, output, error = self._run_command(['git', 'clone', repo_url, str(repo_path)])
+            if self.interactive:
+                success, output, error = self._run_command_interactive(['git', 'clone', repo_url, str(repo_path)])
+            else:
+                success, output, error = self._run_command(['git', 'clone', repo_url, str(repo_path)])
             
             if success:
                 self.logger.info(f"Successfully cloned {repo}")
                 success_count += 1
             else:
-                self.logger.error(f"Failed to clone {repo}: {error}")
+                if self.interactive:
+                    self.logger.error(f"Failed to clone {repo}")
+                else:
+                    self.logger.error(f"Failed to clone {repo}: {error}")
                 error_count += 1
         
         self.logger.info(f"Clone operation completed: {success_count} cloned, {skip_count} skipped, {error_count} errors")
@@ -129,24 +152,30 @@ class GitTools:
                 self.logger.warning(f"Repository {repo} has uncommitted changes, skipping update")
                 error_count += 1
                 continue
-            
-            # Switch to main branch
-            success, output, error = self._run_command(['git', 'checkout', 'main'], cwd=str(repo_path))
+            # Switch to master branch
+            success, output, error = self._run_command(['git', 'checkout', 'master'], cwd=str(repo_path))
             if not success:
-                # Try 'master' if 'main' doesn't exist
-                success, output, error = self._run_command(['git', 'checkout', 'master'], cwd=str(repo_path))
+                # Try 'main' if 'master' doesn't exist
+                success, output, error = self._run_command(['git', 'checkout', 'main'], cwd=str(repo_path))
                 if not success:
-                    self.logger.error(f"Failed to checkout main/master branch for {repo}: {error}")
+                    self.logger.error(f"Failed to checkout master/main branch for {repo}: {error}")
                     error_count += 1
                     continue
             
             # Pull latest changes
-            success, output, error = self._run_command(['git', 'pull'], cwd=str(repo_path))
+            if self.interactive:
+                success, output, error = self._run_command_interactive(['git', 'pull'], cwd=str(repo_path))
+            else:
+                success, output, error = self._run_command(['git', 'pull'], cwd=str(repo_path))
+                
             if success:
                 self.logger.info(f"Successfully updated {repo}")
                 success_count += 1
             else:
-                self.logger.error(f"Failed to pull latest changes for {repo}: {error}")
+                if self.interactive:
+                    self.logger.error(f"Failed to pull latest changes for {repo}")
+                else:
+                    self.logger.error(f"Failed to pull latest changes for {repo}: {error}")
                 error_count += 1
         
         self.logger.info(f"Update operation completed: {success_count} updated, {error_count} errors")
@@ -177,7 +206,6 @@ class GitTools:
 
 
 def show_help():
-    """Display simple help information."""
     print("Git Tools")
     print("Manage multiple git repos for a project\n")
     
@@ -190,11 +218,14 @@ def show_help():
     print("  python3 git-tools.py clone")
     print("  python3 git-tools.py update")
     print("  python3 git-tools.py status")
-    print("  python3 git-tools.py -c work-repos.json clone")
+    print("  python3 git-tools.py --config work-repos.json clone")
     print("  python3 git-tools.py --config personal-repos.json update")
+    print("  python3 git-tools.py --interactive clone")
+    print("  python3 git-tools.py --interactive --config azure-repos.json clone")
     
     print("\nOptions:")
-    print("  -c, --config     Specify custom config file (default: repositories.json)")
+    print("  --config         Specify custom config file (default: repositories.json)")
+    print("  --interactive    Enable interactive mode for credential prompts")
     print("  -v, --verbose    Enable verbose logging")
     print("  -h, --help       Show this help")
 
@@ -210,15 +241,7 @@ def main():
     
     # Handle config file option
     config_file = "repositories.json"
-    if "-c" in args:
-        config_index = args.index("-c")
-        if config_index + 1 < len(args):
-            config_file = args[config_index + 1]
-            args = args[:config_index] + args[config_index + 2:]
-        else:
-            print("Error: -c option requires a config file path")
-            sys.exit(1)
-    elif "--config" in args:
+    if "--config" in args:
         config_index = args.index("--config")
         if config_index + 1 < len(args):
             config_file = args[config_index + 1]
@@ -233,6 +256,12 @@ def main():
         verbose = True
         args = [arg for arg in args if arg not in ["-v", "--verbose"]]
     
+    # Handle interactive flag
+    interactive = False
+    if "--interactive" in args:
+        interactive = True
+        args = [arg for arg in args if arg not in ["--interactive"]]
+    
     # Check for valid command
     if not args or args[0] not in ["clone", "update", "status"]:
         print("Error: Please specify a valid command (clone, update, or status)")
@@ -245,8 +274,8 @@ def main():
     if verbose:
         logging.getLogger().setLevel(logging.DEBUG)
     
-    # Initialize manager with specified config file
-    gittools = GitTools(config_file)
+    # Initialize manager with specified config file and interactive mode
+    gittools = GitTools(config_file, interactive)
     
     # Execute requested operation
     if mode == "clone":
