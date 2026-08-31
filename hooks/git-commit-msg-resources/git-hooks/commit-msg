@@ -1,0 +1,38 @@
+#! /usr/bin/env python3
+
+import sys
+import re
+from subprocess import check_output
+
+# Figure out which branch we're on
+branch = check_output(["git", "symbolic-ref", "--short", "HEAD"]).strip().decode('utf-8')
+jira_issue_search_results = re.search("([A-Z]+-[0-9]+)", branch)
+branch_ticket_number = None if jira_issue_search_results is None else jira_issue_search_results.group(1)
+merge_commit_message_pattern = re.compile("^Merge (commit|branch|remote-tracking branch|pull request) .*")
+reverse_commit_message_pattern = re.compile("^Revert \".*\" .*")
+nojira_commit_message_pattern = re.compile("^NOJIRA (.*\s)*")
+
+with open(sys.argv[1], "r+") as message_file:
+	content = message_file.read()
+	is_merge_commit_message = merge_commit_message_pattern.match(content)
+	is_reverse_commit_message = reverse_commit_message_pattern.match(content)
+	is_nojira_commit_message = nojira_commit_message_pattern.match(content)
+	# If we are merging, reverting, pass
+	if is_merge_commit_message or is_reverse_commit_message:
+		sys.exit()
+	
+	# If we are on the master branch, check that there is a reviewer specified
+	if branch == "master":
+		reviewer_search_results = re.search("Reviewer: [a-z]+", content)
+		if reviewer_search_results is None:
+			print("commit-msg: ERROR! The commit message must contain a reviewer if there is no ticket number")
+			sys.exit(1)
+
+	branch_ticket_number_exists = branch_ticket_number is not None
+	branch_ticket_number_matches = branch_ticket_number_exists and content.startswith(branch_ticket_number)
+	prefix_acceptable = is_nojira_commit_message or branch_ticket_number_matches
+	# If we are on a branch with a ticket number, check that it is the first thing in the commit message, otherwise NOJIRA
+	if not prefix_acceptable:
+		valid_prefix = branch_ticket_number + ' or NOJIRA' if branch_ticket_number_exists else 'NOJIRA'
+		print("commit-msg: ERROR! The commit message must start with %s" % valid_prefix)
+		sys.exit(1)
